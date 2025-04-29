@@ -1,51 +1,40 @@
 import streamlit as st
 import requests
 import pandas as pd
-import datetime
 
 st.set_page_config(page_title="Cripto Dashboard", layout="wide")
+st.title("📊 Dashboard de Criptomoedas (via CoinGecko API)")
 
-# --- Título ---
-st.title("📈 Painel de Criptomoedas em Tempo Real - CoinGecko API")
-
-# --- Sidebar ---
+# Sidebar
 st.sidebar.header("Configurações")
-vs_currency = st.sidebar.selectbox("Moeda base", ["usd", "eur", "brl"])
-per_page = st.sidebar.slider("Quantidade de moedas", min_value=5, max_value=100, value=10)
-refresh = st.sidebar.button("🔄 Atualizar agora")
+moeda = st.sidebar.selectbox("Moeda", ["usd", "eur", "brl"])
+quantidade = st.sidebar.slider("Número de moedas", 5, 50, 10)
 
-# --- Função para pegar dados da API ---
-@st.cache_data(ttl=300)
-def get_crypto_data(vs_currency, per_page):
-    url = f"https://api.coingecko.com/api/v3/coins/markets"
-    params = {
-        "vs_currency": vs_currency,
+# Função para obter dados da API CoinGecko
+def carregar_dados(moeda, quantidade):
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    parametros = {
+        "vs_currency": moeda,
         "order": "market_cap_desc",
-        "per_page": per_page,
+        "per_page": quantidade,
         "page": 1,
-        "sparkline": "false"
+        "sparkline": False
     }
-    response = requests.get(url, params=params)
-    data = response.json()
-    df = pd.DataFrame(data)[["id", "symbol", "current_price", "market_cap", "price_change_percentage_24h"]]
-    df.rename(columns={
-        "id": "Criptomoeda",
-        "symbol": "Símbolo",
-        "current_price": f"Preço ({vs_currency.upper()})",
-        "market_cap": "Cap. de Mercado",
-        "price_change_percentage_24h": "Variação 24h (%)"
-    }, inplace=True)
-    return df
+    resposta = requests.get(url, params=parametros)
+    if resposta.status_code == 200:
+        dados = resposta.json()
+        df = pd.DataFrame(dados)
+        df = df[["name", "symbol", "current_price", "market_cap", "price_change_percentage_24h"]]
+        df.columns = ["Nome", "Símbolo", f"Preço ({moeda.upper()})", "Capitalização de Mercado", "Variação 24h (%)"]
+        return df
+    else:
+        st.error("Erro ao buscar dados da API.")
+        return pd.DataFrame()
 
-# --- Obter dados ---
-df_crypto = get_crypto_data(vs_currency, per_page)
+# Carregar dados
+df = carregar_dados(moeda, quantidade)
 
-# --- Exibir dados ---
-st.dataframe(df_crypto, use_container_width=True)
-
-# --- Gráfico ---
-st.subheader("📊 Variação de Preço (24h)")
-st.bar_chart(df_crypto.set_index("Criptomoeda")["Variação 24h (%)"])
-
-# --- Atualização de tempo ---
-st.caption(f"Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+# Mostrar tabela
+if not df.empty:
+    st.dataframe(df, use_container_width=True)
+    st.bar_chart(df.set_index("Nome")["Variação 24h (%)"])
